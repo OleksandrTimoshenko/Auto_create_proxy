@@ -1,0 +1,40 @@
+---
+- hosts: all
+  become: yes
+  remote_user: root
+  tasks:
+    - name: Install squide
+      yum: name=squid state=present
+    - name: Enable service squid, and not touch the state
+      service:
+        name: squid
+        enabled: yes
+    - name: Generate sertificate
+      command: openssl req -new -newkey rsa:2048 -sha256 -days 365 -nodes -x509 -extensions v3_ca -keyout squid-ca-key.pem -out squid-ca-cert.pem -subj "/C=US/ST=Ohio/L=Columbus/O=Acme Company/OU=Acme/CN=example.com"
+    - name: Fetch the file from the mwiapp01 to master
+      fetch: src=/home/alex/squid-ca-cert.pem dest=/home/alex/squid-ca-cert.pem
+    - name: Ctick files together
+      shell: cat squid-ca-cert.pem squid-ca-key.pem >> squid-ca-cert-key.pem
+      args:
+        executable: /bin/bash
+    - name: Make directory for certificates
+      file:	
+        path: /etc/squid/certs
+        state: directory
+    - name: Move certificates 
+      command: mv squid-ca-cert-key.pem /etc/squid/certs/.
+    - name: Add permisions to cert
+      command: chown squid:squid -R /etc/squid/certs
+    - name: Let it be...
+      command: /usr/lib64/squid/ssl_crtd -c -s /var/lib/ssl_db
+    - name: Add access to squide log folder
+      command: chmod 777 /var/log/squid/
+    - name: Update squid config file
+      copy: src=/home/alex/python/defoult.conf dest=/etc/squid/squid.conf
+    - name: Update SELinux config
+      copy: src=/home/alex/ansible/disabled_selinux dest=/etc/selinux/config
+    - name: Reboot a Linux machine 
+      reboot:
+        test_command: uptime
+
+  ### file with certificate you can find in     ~/squid-ca-cert.pem/1/home/alex/squid-ca-cert.pem 
